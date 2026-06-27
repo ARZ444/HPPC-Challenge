@@ -2,63 +2,14 @@ Student Name: ABANG RAIF ZAKWAN BIN ABANG RAZALI
 Student ID: B24CS0001
 
 Explanation of my optimization strategy:
-My starting point was the working Part 1 MPI program, which keeps the row
-decomposition, the MPI_Allreduce(MPI_MAX) convergence test and the MPI_Wtime
-timing. The optimization I applied is to overlap the halo (ghost row) exchange
-with computation. In Part 1 the halo exchange used blocking MPI_Send and
-MPI_Recv, so each process had to finish sending and receiving its two ghost
-rows before it could begin the Jacobi update. In the optimized version I
-replaced that with the non-blocking calls MPI_Irecv and MPI_Isend (Module 6a):
-the process posts the receives for its top and bottom ghost rows and the sends
-of its first and last real rows, and then returns immediately instead of
-waiting.
+I started from my working Part 1 MPI program and kept the same row decomposition, the MPI_Allreduce(MPI_MAX) convergence check and the MPI_Wtime timing. The optimization I tried is to overlap the halo (ghost row) exchange with the computation. In Part 1 I used blocking MPI_Send and MPI_Recv, so each process had to finish sending and receiving its two ghost rows before it could start the Jacobi update. In the optimized version I changed this to the non-blocking calls MPI_Irecv and MPI_Isend (Module 6a): each process posts the receives for its top and bottom ghost rows and the sends of its first and last real rows, and then carries on instead of waiting.
 
-While those messages are in flight, the process updates the local interior
-rows that do not depend on any ghost cell. Only the very first and very last
-real rows of a subdomain need the received halo, so every row strictly between
-them can be computed straight away. After that work is done I call MPI_Waitall
-to make sure the ghost rows have arrived, and only then update the first and
-last rows. This is the "overlap communication with computation" idea from the
-performance/hybrid notes (Module 9): the time spent transferring the halo is
-hidden behind useful arithmetic instead of being pure idle waiting.
+While those messages are still being sent, the process updates the interior rows that do not need any ghost cell. Only the first and last real rows of each block actually need the received halo, so all the rows in between can be done right away. After that I call MPI_Waitall to make sure the ghost rows have arrived, and only then update the first and last rows. This is the "overlap communication with computation" idea from the notes (Module 9) - the time spent moving the halo is hidden behind useful work instead of just waiting.
 
-The change is purely about scheduling the communication; the numerical work is
-untouched. Every interior point is still computed from the old grid only, the
-local maximum change is still taken over exactly the same interior point set,
-and the global maximum is still obtained with MPI_Allreduce(MPI_MAX). As a
-result the optimized version produces identical output to the serial and Part 1
-versions at every process count: 10001 iterations and a final maximum change of
-1.273176e-02 for np = 1, 2, 4 and 8.
+I only changed how the communication is scheduled, not the maths. Every interior point is still computed from the old grid only, the local maximum is taken over the same interior points, and the global maximum still comes from MPI_Allreduce(MPI_MAX). So the optimized version gives exactly the same output as the serial and Part 1 versions for np = 1, 2, 4 and 8: 10001 iterations and a final maximum change of 1.273176e-02.
 
 What worked well:
-Correctness was preserved perfectly, which is the most important property: the
-non-blocking version still matches the serial baseline exactly (10001 iterations
-and 1.273176e-02) for 1, 2, 4 and 8 processes, so the overlap and the split of
-the update into halo-independent and halo-dependent rows were implemented
-without changing the result. The non-blocking structure is also the standard,
-scalable communication pattern: on a real distributed cluster, where halo
-messages cross a network with real latency and the runtime can progress messages
-on spare resources, hiding that latency behind the interior computation is where
-this optimization pays off.
+The most important thing is that correctness stayed exact - the non-blocking version still matches the serial baseline (10001 iterations and 1.273176e-02) for 1, 2, 4 and 8 processes, so splitting the update into halo-independent and halo-dependent rows did not change the result. The non-blocking version is also the proper, scalable communication pattern: on a real cluster where the halos cross a network and the runtime can move messages in the background, hiding that latency behind the interior computation is exactly where this would help.
 
 What challenges did you face:
-The main challenge was that the optimization did not actually run faster on the
-test machine, which has only 2 physical cores. Measured at np = 2 (3 runs each),
-the blocking Part 1 version averaged about 4.4 seconds while the non-blocking
-optimized version averaged about 6.0 seconds, so it was slower rather than
-faster. The reason is that genuine overlap needs spare hardware to make progress
-on the messages while the cores compute; with both cores fully busy and no
-asynchronous progress, the non-blocking messages only really move during
-MPI_Waitall, so no overlap is realized. On top of that, the halo rows here are
-tiny (one row of 1000 doubles, about 8 KB) and travel through shared memory
-between processes on the same node, so the communication latency is already
-negligible compared with the heavy per-iteration computation over a million
-points, leaving almost nothing to hide. The extra per-iteration work of
-splitting the update into three phases then shows up as a small net slowdown.
-The other challenges were making sure the deferred first and last rows read only
-the old grid (so the result stays identical) and correctly classifying which
-local rows depend on a ghost row at the rank boundaries. The takeaway, in line
-with the assessment notes that a low speedup is acceptable if it is explained,
-is that this optimization is correct and is the right design for a latency-bound
-distributed cluster, but it cannot show a benefit on a single shared-memory
-machine with only two cores.
+The main problem was that the optimization did not actually run faster on my test machine, which only has 2 physical cores. At np = 2 (3 runs each) the blocking Part 1 version averaged about 4.4 seconds, while the non-blocking version averaged about 6.0 seconds, so it was slower. The reason is that real overlap needs spare hardware to move the messages while the cores are computing; with both cores fully busy and no background progress, the non-blocking messages only really move during MPI_Waitall, so there is no overlap. The halos are also tiny (one row of 1000 doubles, about 8 KB) and go through shared memory between processes on the same machine, so the communication is already very cheap compared with the heavy per-iteration work over a million points - there is almost nothing to hide. The extra cost of splitting the update into three phases then shows up as a small slowdown. The other tricky parts were making sure the deferred first and last rows still read only the old grid (so the answer stays the same) and getting the boundary rows classified correctly at each rank. Since the assessment notes say a low speedup is fine if it is explained, my conclusion is that this optimization is correct and is the right design for a latency-bound cluster, but it cannot show a benefit on a single 2-core shared-memory machine.
