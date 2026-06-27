@@ -1,0 +1,16 @@
+# Build artifacts
+*.o
+*.obj
+*.a
+*.out
+a.out
+*.exe
+bin/
+build/
+
+# Editor / OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
