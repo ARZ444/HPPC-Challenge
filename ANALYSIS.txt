@@ -1,5 +1,5 @@
-Student Name: [REPLACE WITH YOUR NAME]
-Student ID: [REPLACE WITH YOUR STUDENT ID]
+Student Name: ABANG RAIF ZAKWAN BIN ABANG RAZALI
+Student ID: B24CS0001
 
 Explanation of my optimization strategy:
 My starting point was the working Part 1 MPI program, which keeps the row
