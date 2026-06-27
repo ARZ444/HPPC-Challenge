@@ -59,6 +59,9 @@ int main() {
 
     initialize(grid, new_grid);
 
+    // omp_get_wtime() is the OpenMP wall-clock timer (the OpenMP analogue of
+    // MPI_Wtime). Reference: OpenMP Application Programming Interface
+    // Specification, openmp.org.
     double start = omp_get_wtime();
 
     int iter = 0;

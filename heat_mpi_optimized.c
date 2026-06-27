@@ -131,6 +131,7 @@ int main(int argc, char **argv) {
         // bottom ghost). The guards skip missing neighbours, so rank 0 and
         // rank size-1 post fewer messages and np = 1 posts none.
         MPI_Request reqs[4];
+        MPI_Status statuses[4];
         int nreq = 0;
         if (up >= 0) {
             MPI_Irecv(cur[0], NY, MPI_DOUBLE, up, 0, MPI_COMM_WORLD, &reqs[nreq++]);
@@ -151,7 +152,7 @@ int main(int argc, char **argv) {
         }
 
         // ---- Complete the halo exchange ------------------------------------
-        if (nreq > 0) MPI_Waitall(nreq, reqs, MPI_STATUSES_IGNORE);
+        if (nreq > 0) MPI_Waitall(nreq, reqs, statuses);
 
         // ---- Update the rows that needed the ghost cells -------------------
         if (up >= 0) {
